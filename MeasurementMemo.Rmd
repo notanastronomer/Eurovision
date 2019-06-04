@@ -130,7 +130,7 @@ jpeg("unsupervised1.jpg")
 labelTopics(stm.out)
 plot.STM(stm.out, n=5)
 
-png("Plot5.png", width = 6, height = 6, units = 'in', res = 300)
+png("unsupervised2.png", width = 6, height = 6, units = 'in', res = 300)
 
 prep <- estimateEffect(c(1:5) ~ Place2, stm.out, out$meta)
 plot.estimateEffect(prep, covariate = "Place2", 
