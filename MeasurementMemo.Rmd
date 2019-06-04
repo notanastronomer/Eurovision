@@ -1,0 +1,146 @@
+---
+title: "But When Sweden Gets 12 Points From Norway, It's Clearly Just Good Taste: The Determinants of Eurovision Success"
+output: pdf_document
+---
+
+```{r, setup, include=FALSE}
+library(stringi)
+library(openxlsx)
+library(plyr)
+library(dplyr)
+library(rvest)
+library(xml2)
+library(geosphere)
+library(stringr)
+library(ggplot2)
+library(rjson)
+library(quanteda)
+library(wordcloud)
+library(lettercase)
+library(stm)
+```
+
+# Data Processing
+
+To avoid repeating the same code, I've exported my database to a csv and re-imported it here.  (I have added 2019 data and also excluded the h3 HTML tag that was including song titles in my lyrics.)
+
+``` {r}
+set.seed(1)
+justsongs <- read.csv("songtitles.csv")
+fullscores <- read.csv("fullscores.csv")
+english <- subset(justsongs, Language == "English")
+
+english$winner <- ifelse(english$Place == 1, 1, 0)
+english$label <- ifelse(english$Year != 2019, 1, NA)
+english$num <- 1:nrow(english)
+english$Place <- ifelse(english$Place == "26a", "26", english$Place)
+english$Place <- ifelse(english$Place == "25 [D]", "25", english$Place)
+english$Place <- ifelse(english$Place == "24 [D]", "24", english$Place)
+english$Place <- ifelse(english$Place == "23 [D]", "23", english$Place)
+english$Place2 <- as.numeric(as.character(english$Place))
+english$topfive <- ifelse(english$Place2 < 6, 1, 0)
+```
+
+# Supervised Learning
+
+I actually do not expect lyrics to be a particularly good predictor of Eurovision success; that is, I do not expect that this will be able to predict a winner very accurately.  (I think geopolitical and country-specific factors will matter more; that will be explored further in the poster version.)
+
+``` {r}
+set.seed(1)
+
+corpus <- corpus(as.character(english$lyrics), docvars=english)
+doc.features <- dfm(corpus, remove=stopwords("english"), remove_punct=T)
+
+# attach a column in english, where it was in the running order
+
+docvars(corpus, "id") <- 1:ndoc(corpus)
+test <- which(is.na(english$label))
+labeled <- which(!is.na(english$label))
+
+dfmat_train <- doc.features[labeled,]
+dfmat_test <- doc.features[test,]
+
+tmod_nb <- textmodel_nb(dfmat_train, docvars(dfmat_train, "winner"))
+
+#Words associated with winning:
+head(sort(tmod_nb$PwGc[2,]/tmod_nb$PwGc[1,], decreasing=T))
+#Words not associated with not winning:
+head(sort(tmod_nb$PwGc[1,]/tmod_nb$PwGc[2,], decreasing=T))
+
+predict.test <- predict(tmod_nb, newdata = dfmat_test)
+predict.test
+
+tab_test <- table(docvars(dfmat_test, "winner"), predict.test)
+```
+This predicts two winners - Russia's "Scream" (placed third) and Azerbaijan's "Truth" (placed seventh).  This is better than I expected it to do.
+
+Let's consider how accurately it can find top 5 finishers:
+``` {r}
+set.seed(1)
+corpus <- corpus(as.character(english$lyrics), docvars=english)
+doc.features <- dfm(corpus, remove=stopwords("english"), remove_punct=T)
+
+docvars(corpus, "id") <- 1:ndoc(corpus)
+test <- which(is.na(english$label))
+labeled <- which(!is.na(english$label))
+
+dfmat_train <- doc.features[labeled,]
+dfmat_test <- doc.features[test,]
+
+tmod_nb <- textmodel_nb(dfmat_train, docvars(dfmat_train, "topfive"))
+
+#Words associated with winning:
+head(sort(tmod_nb$PwGc[2,]/tmod_nb$PwGc[1,], decreasing=T))
+#Words not associated with not winning:
+head(sort(tmod_nb$PwGc[1,]/tmod_nb$PwGc[2,], decreasing=T))
+
+predict.train <- predict(tmod_nb, dfmat_train)
+tab_train <- table(docvars(dfmat_train, "topfive"), predict.train)
+
+#recall
+diag(tab_train)/colSums(tab_train)
+#precision
+diag(tab_train)/rowSums(tab_train)
+
+predict.test <- predict(tmod_nb, newdata = dfmat_test)
+predict.test
+
+tab_test <- table(docvars(dfmat_test, "winner"), predict.test)
+
+#recall
+diag(tab_test)/colSums(tab_test)
+#precision
+diag(tab_test)/rowSums(tab_test)
+```
+
+Thus, its predicted top five finishers are Malta (placed 16), Russia (placed 3), North Macedonia (placed 8),  and the UK (placed 23).
+
+Thus, it correctly found one of the top five - but since 29% of the final ends up in the top five, this isn't all that impressive.  In other words, lyrics don't seem to be that predictive.
+
+# Unsupervised
+
+I theorize there are only a handful of types of Eurovision song - heartbreak songs, "I'm in love", and offbeat songs (see: Lordi, Hatari, etc.)
+
+``` {r}
+set.seed(1)
+out <- convert(doc.features, to = "stm", docvars = english)
+stm.out = stm(out$documents, out$vocab, K=5, 
+               data=out$meta, init.type="Spectral")
+jpeg("unsupervised1.jpg")
+labelTopics(stm.out)
+plot.STM(stm.out, n=5)
+
+png("Plot5.png", width = 6, height = 6, units = 'in', res = 300)
+
+prep <- estimateEffect(c(1:5) ~ Place2, stm.out, out$meta)
+plot.estimateEffect(prep, covariate = "Place2", 
+                    method="difference", cov.value1=1, cov.value2=30, verbose.labels = FALSE)
+dev.off()
+```
+These do not seem notably different (nor do other iterations with different numbers of clusters produce more useful clusters).
+
+There is no statistically significant difference by category (even comparing placing first to 30th).
+
+# Prediction
+
+I think a more accurate, but less text-based, approach would be to consider the factors outlined in my first memo, perhaps combined with a sentiment score.  This will use lyrics less but is more similar to the methods used in the prior Eurovision literaure.
