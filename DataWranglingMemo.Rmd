@@ -60,6 +60,15 @@ scores<-scores[is.na(scores$Duplicate),]
 scores$To <- scores$To.country
 scores$From <- scores$From.country
 
+scores$To[scores$To == "Serbia & Montenegro"] <- "Serbia and Montenegro"
+scores$From[scores$From == "Serbia & Montenegro"] <- "Serbia and Montenegro"
+scores$To[scores$To == "Serbia & Montenegro"] <- "Serbia and Montenegro"
+scores$To[scores$To == "Bosnia & Herzegovina"] <- "Bosnia and Herzegovina"
+scores$From[scores$From == "Bosnia & Herzegovina"] <- "Bosnia and Herzegovina"
+scores$To[scores$To == "F.Y.R. Macedonia"] <- "Macedonia"
+scores$From[scores$From == "F.Y.R. Macedonia"] <- "Macedonia"
+
+
 # addyear <- function(year, html)
 # {
 #   str <- paste("https://en.wikipedia.org/wiki/Eurovision_Song_Contest_", toString(year), sep = "")
@@ -155,12 +164,9 @@ scores$From <- scores$From.country
 # process2019$To <- revalue(process2019$To, c("West Germany"="Germany", "Serbia and Montenegro2" = "Serbia and Montenegro", "Croatia2" = "Croatia"))
 
 songtitles <- read.csv("songtitles.csv")
+songtitles$To[songtitles$To == "North Macedonia"] <- "Macedonia"
 eurovision <- merge(scores, songtitles, by=c("Year", "To"), all.x=TRUE)
 capitals <- read.csv("concap.csv")
-
-eurovision <- merge(eurovision, capitals, by.x="From", by.y = "CountryName")
-eurovision <- merge(eurovision, capitals, by.x="To", by.y = "CountryName")
-eurovision$dist <- distGeo(data.frame(eurovision$CapitalLongitude.x, eurovision$CapitalLatitude.x), data.frame(eurovision$CapitalLongitude.y, eurovision$CapitalLatitude.y))
 ```
 
 ``` {r}

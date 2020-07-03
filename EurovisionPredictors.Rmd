@@ -88,10 +88,10 @@ dyadsnineties <- data.frame(nineties$From, nineties$To, nineties$Year, nineties$
 dyadstwothousands <- data.frame(twothousands$From, twothousands$To, twothousands$Year, twothousands$correctnormalization, twothousands$avg, twothousands$instances)
 dyadstwentytens <- data.frame(twentytens$From, twentytens$To, twentytens$Year, twentytens$correctnormalization, twentytens$avg, twentytens$instances)
 
-dyadseighties<- subset(dyadseighties, eighties.avg > 0.15)
-dyadsnineties <- subset(dyadsnineties, nineties.avg > 0.15)
-dyadstwothousands <- subset(dyadstwothousands, twothousands.avg > 0.15)
-dyadstwentytens <- subset(dyadstwentytens, twentytens.avg > 0.15)
+dyadseighties<- subset(dyadseighties, eighties.avg > 0.155)
+dyadsnineties <- subset(dyadsnineties, nineties.avg > 0.155)
+dyadstwothousands <- subset(dyadstwothousands, twothousands.avg > 0.155)
+dyadstwentytens <- subset(dyadstwentytens, twentytens.avg > 0.155)
 
 dyads <- subset(dyads, dyads$fullscores.instances > 4)
 dyadseighties <- subset(dyadseighties, dyadseighties$eighties.instances > 1)
@@ -191,16 +191,18 @@ fullscores$twentytens <- ifelse(fullscores$Year > 2010, 1, 0)
 ``` {r}
 countries <- read.csv("COW country codes.csv")
 countries <- countries %>% distinct(CCode, StateNme)
-fullscores <- merge(fullscores, countries, by.x = "To", by.y = "StateNme")
-fullscores <- merge(fullscores, countries, by.x = "From", by.y = "StateNme", suffixes = c(".To", ".From"))
+fullscores <- merge(fullscores, countries, by.x = "To", by.y = "StateNme", all.x = TRUE)
+fullscores <- merge(fullscores, countries, by.x = "From", by.y = "StateNme", suffixes = c(".To", ".From"), all.x = TRUE)
+
+sum(fullscores$From == "Serbia")
 
 alliances <- read.csv("version4.1_csv/alliance_v4.1_by_dyad_yearly.csv")
 alliances <- alliances %>% distinct(ccode1, ccode2, year)
 alliances$ally <- 1
 alliances <- subset(alliances, alliances$year > 1975)
 
-dyad_mids <- read.dta13("../Data/DYDMID3.1/dyadic mid 3.1_may 2018.dta")
-locations <- read.csv("../Data/MIDLOC_2.1/MIDLOCA_2.1.csv")
+dyad_mids <- read.dta13("DYDMID3.1/dyadic mid 3.1_may 2018.dta")
+locations <- read.csv("MIDLOC_2.1/MIDLOCA_2.1.csv")
 mid_loc <- left_join(dyad_mids, locations, by = c("disno" = "dispnum"))
 
 europe_mids <- subset(mid_loc, mid_loc$year.x > 1975)
@@ -215,11 +217,10 @@ fullscores$mid[is.na(fullscores$mid)] <- 0
 ```
 
 ``` {r}
-fullscores$dist <- fullscores$dist / 1000
 fullscores$english <- ifelse(fullscores$Language == "English", 1, 0)
 data.frame(fullscores$To[is.na(fullscores$Draw)], fullscores$Year[is.na(fullscores$Draw)])
 fullscores$dyad <- paste0(fullscores$To, fullscores$From)
-storethis <- lm(data = fullscores, correctnormalization ~  To +  as.numeric(Draw) +  english + To*From + Year +  dist + neighbor + seventies * To + eighties * To + nineties * To + twothousands * To + twentytens * To + ally + mid)
+storethis <- lm(data = fullscores, correctnormalization ~  To +  as.numeric(Draw) +  english + To*From + Year  + neighbor + seventies * To + eighties * To + nineties * To + twothousands * To + twentytens * To + ally + mid)
 summary(storethis)
 screenreg(storethis, file = "output.txt")
 ```
@@ -233,16 +234,19 @@ order(-storethis$coefficients)
 lm(Place ~ english + Draw, data= fullscores)
 storethis$coefficients[names(storethis$coefficients) == "english"]
 storethis$coefficients[names(storethis$coefficients) == "as.numeric(Draw)"]*26
-storethis$coefficients[names(storethis$coefficients) == "mid"]*2
+storethis$coefficients[names(storethis$coefficients) == "ally"]*2*58
+storethis$coefficients[names(storethis$coefficients) == "mid"]*2*58
+storethis$coefficients[names(storethis$coefficients) == "ToAustria"]
+storethis$coefficients[names(storethis$coefficients) == "ToSan Marino"]
 ```
 
 ``` {r}
-no_decades <- lm(data = fullscores, correctnormalization ~  To +  as.numeric(Draw) +  english + To*From + Year +  dist + neighbor)
+no_decades <- lm(data = fullscores, correctnormalization ~  To +  as.numeric(Draw) +  english + To*From + Year+ neighbor)
 
-no_neigh <- lm(data = fullscores, correctnormalization ~  To +  From + To*From + Year)
+no_neigh <- lm(data = fullscores, correctnormalization ~  To +  From + To*From + Year + ally + mid)
 summary(no_neigh)
 
-no_interact <- lm(data = fullscores, correctnormalization ~  To +  as.numeric(Draw) +  english + Year +  dist + neighbor)
+no_interact <- lm(data = fullscores, correctnormalization ~  To +  as.numeric(Draw) +  english + Year + neighbor)
 summary(no_interact)
 sort(no_interact$coefficients)
 ```
@@ -258,6 +262,6 @@ mean(fullscores$voting) * storethis$coefficients[names(storethis$coefficients) =
 ```
 
 ``` {r}
-place <- lm(data = fullscores, Place ~  To +  as.numeric(Draw) +  english + To*From + Year +  dist + neighbor + seventies * To + eighties * To + nineties * To + twothousands * To + twentytens * To + ally)
+place <- lm(data = fullscores, Place ~  To +  as.numeric(Draw) +  english + To*From + Year + neighbor + seventies * To + eighties * To + nineties * To + twothousands * To + twentytens * To + ally)
 screenreg(place, file = "place.txt")
 ```
