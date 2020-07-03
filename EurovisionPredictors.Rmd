@@ -88,10 +88,10 @@ dyadsnineties <- data.frame(nineties$From, nineties$To, nineties$Year, nineties$
 dyadstwothousands <- data.frame(twothousands$From, twothousands$To, twothousands$Year, twothousands$correctnormalization, twothousands$avg, twothousands$instances)
 dyadstwentytens <- data.frame(twentytens$From, twentytens$To, twentytens$Year, twentytens$correctnormalization, twentytens$avg, twentytens$instances)
 
-dyadseighties<- subset(dyadseighties, eighties.avg > 0.155)
-dyadsnineties <- subset(dyadsnineties, nineties.avg > 0.155)
-dyadstwothousands <- subset(dyadstwothousands, twothousands.avg > 0.155)
-dyadstwentytens <- subset(dyadstwentytens, twentytens.avg > 0.155)
+dyadseighties<- subset(dyadseighties, eighties.avg > 0.16)
+dyadsnineties <- subset(dyadsnineties, nineties.avg > 0.16)
+dyadstwothousands <- subset(dyadstwothousands, twothousands.avg > 0.16)
+dyadstwentytens <- subset(dyadstwentytens, twentytens.avg > 0.16)
 
 dyads <- subset(dyads, dyads$fullscores.instances > 4)
 dyadseighties <- subset(dyadseighties, dyadseighties$eighties.instances > 1)
