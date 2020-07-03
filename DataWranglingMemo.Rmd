@@ -17,7 +17,6 @@ library(ggplot2)
 library(rjson)
 library(quanteda)
 library(wordcloud)
-library(lettercase)
 ```
 
 # Database construction
@@ -53,111 +52,119 @@ Covariates I have considered but do not appear here:
 The construction of my database is below:
 
 ``` {r, include=TRUE}
-scores <- read.xlsx("eurovision_song_contest_1975_2018v2.xlsx")
-scores <- subset(scores, scores$Final == "f")
 
-addyear <- function(year, html)
-{
-  str <- paste("https://en.wikipedia.org/wiki/Eurovision_Song_Contest_", toString(year), sep = "")
-  wikipedia_page<-read_html(str)
-  section_of_wikipedia<-html_node(wikipedia_page, xpath=html)
-  yeartable <- html_table(section_of_wikipedia)
-  Year <- rep(year, nrow(yeartable))
-  colnames(yeartable) <- c("Draw", "To", "Artist", "Song", "Language", "Place", "Points")
-  yeartable <- cbind(yeartable, Year)
-  for (i in 1:length(yeartable$To))
-  {
-    slug <- str_replace_all(tolower(yeartable$To[i])," ","-")
-    slug <- ifelse(slug == "bosnia-and-herzegovina", "bosnia-herzegovina", slug)
-    slug <- ifelse(slug == "macedonia", "north-macedonia", slug)
-    slug <- ifelse(slug == "serbia-and-montenegro2", "serbia-montenegro", slug)
-    slug <- ifelse(slug == "serbia-and-montenegro", "serbia-montenegro", slug)
-    slug <- ifelse(slug == "croatia2", "croatia", slug)
-    slug <- ifelse(slug == "west-germany", "germany", slug)
-    url <- paste("https://eurovisionworld.com/eurovision/", toString(year), "/", slug, sep = "")
-    webpage <- read_html(url)
-    lyrics <- html_nodes(webpage, xpath = '//*[@id="lyrics_0"]')
-    lyrics <- gsub(pattern = "<h3>.*</h3>", replacement = "", x = lyrics)
-    lyrics <- str_replace_all(lyrics, "<br>", " ")
-    lyrics <- read_html(lyrics)
-    lyrics <- html_text(lyrics)
-    lyrics <- str_replace_all(lyrics, "\\?", "\\? ")
-    lyrics <- str_replace_all(lyrics, "\\.", "\\. ")
-    lyrics <- str_replace_all(lyrics, "\\!", "\\! ")
-    lyrics <- str_replace_all(lyrics, "\\(", " \\( ")
-    lyrics <- str_replace_all(lyrics, "\\)", " \\) ")
-    lyrics <- str_replace_all(lyrics, "\\n", " ")
-    yeartable$lyrics[i] <- str_expand_capwords(lyrics)
-  }
-  return(yeartable)
-}
+scores <- read.xlsx("eurovision_song_contest_1975_2019.xlsx")
+scores <- subset(scores, scores$`(semi-).final` == "f")
+scores<-scores[is.na(scores$Duplicate),]
 
-# Sadly I can't automate this because the table isn't in the same part of the page for every year.
-process2019 <- addyear(2019, '//*[@id="mw-content-text"]/div/table[7]')
-process2018 <- addyear(2018, '//*[@id="mw-content-text"]/div/table[6]')
-process2017 <- addyear(2017, '//*[@id="mw-content-text"]/div/table[6]')
-process2016 <- addyear(2016, '//*[@id="mw-content-text"]/div/table[6]')
-process2015 <- addyear(2015, '//*[@id="mw-content-text"]/div/table[6]')
-process2014 <- addyear(2014, '//*[@id="mw-content-text"]/div/table[6]')
-process2013 <- addyear(2013, '//*[@id="mw-content-text"]/div/table[6]')
-process2012 <- addyear(2012, '//*[@id="mw-content-text"]/div/table[5]')
-process2011 <- addyear(2011, '//*[@id="mw-content-text"]/div/table[6]')
-process2010 <- addyear(2010, '//*[@id="mw-content-text"]/div/table[6]')
-process2009 <- addyear(2009, '//*[@id="mw-content-text"]/div/table[6]')
-process2008 <- addyear(2008, '//*[@id="mw-content-text"]/div/table[5]')
-process2007 <- addyear(2007, '//*[@id="mw-content-text"]/div/table[3]')
-process2006 <- addyear(2006, '//*[@id="mw-content-text"]/div/table[3]')
-process2005 <- addyear(2005, '//*[@id="mw-content-text"]/div/table[3]')
-process2004 <- addyear(2004, '//*[@id="mw-content-text"]/div/table[3]')
-process2003 <- addyear(2003, '//*[@id="mw-content-text"]/div/table[3]')
-process2002 <- addyear(2002, '//*[@id="mw-content-text"]/div/table[4]')
-process2001 <- addyear(2001, '//*[@id="mw-content-text"]/div/table[2]')
-process2000 <- addyear(2000, '//*[@id="mw-content-text"]/div/table[3]')
-process1999 <- addyear(1999, '//*[@id="mw-content-text"]/div/table[3]')
-process1998 <- addyear(1998, '//*[@id="mw-content-text"]/div/table[3]')
-process1997 <- addyear(1997, '//*[@id="mw-content-text"]/div/table[3]')
-process1996 <- addyear(1996, '//*[@id="mw-content-text"]/div/table[4]')
-process1995 <- addyear(1995, '//*[@id="mw-content-text"]/div/table[3]')
-process1994 <- addyear(1994, '//*[@id="mw-content-text"]/div/table[3]')
-process1993 <- addyear(1993, '//*[@id="mw-content-text"]/div/table[4]')
-process1992 <- addyear(1992, '//*[@id="mw-content-text"]/div/table[3]')
-process1991 <- addyear(1991, '//*[@id="mw-content-text"]/div/table[4]')
-process1990 <- addyear(1990, '//*[@id="mw-content-text"]/div/table[2]')
-process1989 <- addyear(1989, '//*[@id="mw-content-text"]/div/table[2]')
-process1988 <- addyear(1988, '//*[@id="mw-content-text"]/div/table[3]')
-process1987 <- addyear(1987, '//*[@id="mw-content-text"]/div/table[2]')
-process1986 <- addyear(1986, '//*[@id="mw-content-text"]/div/table[2]')
-process1985 <- addyear(1985, '//*[@id="mw-content-text"]/div/table[4]')
-process1984 <- addyear(1984, '//*[@id="mw-content-text"]/div/table[3]')
-process1983 <- addyear(1983, '//*[@id="mw-content-text"]/div/table[3]')
-process1982 <- addyear(1982, '//*[@id="mw-content-text"]/div/table[2]')
-process1981 <- addyear(1981, '//*[@id="mw-content-text"]/div/table[3]')
-process1980 <- addyear(1980, '//*[@id="mw-content-text"]/div/table[3]')
-process1979 <- addyear(1979, '//*[@id="mw-content-text"]/div/table[2]')
-process1978 <- addyear(1978, '//*[@id="mw-content-text"]/div/table[2]')
-process1977 <- addyear(1977, '//*[@id="mw-content-text"]/div/table[2]')
-process1976 <- addyear(1976, '//*[@id="mw-content-text"]/div/table[2]')
-process1975 <- addyear(1975, '//*[@id="mw-content-text"]/div/table[2]')
+scores$To <- scores$To.country
+scores$From <- scores$From.country
 
-songtitles <- rbind(process2019, process2018, process2017, process2016, process2015, process2014, process2013, process2012, process2012, process2011, process2010, process2009, process2008, process2007, process2006, process2005, process2004, process2003, process2002, process2001, process2000, process1999, process1998, process1997, process1996, process1995, process1994, process1993, process1992, process1991, process1990, process1989, process1988, process1987, process1986, process1985, process1984, process1983, process1982, process1981, process1980, process1979, process1978, process1977, process1976, process1975)
+# addyear <- function(year, html)
+# {
+#   str <- paste("https://en.wikipedia.org/wiki/Eurovision_Song_Contest_", toString(year), sep = "")
+#   wikipedia_page<-read_html(str)
+#   section_of_wikipedia<-html_node(wikipedia_page, xpath=html)
+#   yeartable <- html_table(section_of_wikipedia)
+#   Year <- rep(year, nrow(yeartable))
+#   colnames(yeartable) <- c("Draw", "To", "Artist", "Song", "Language", "Place", "Points")
+#   yeartable <- cbind(yeartable, Year)
+#   for (i in 1:length(yeartable$To))
+#   {
+#     slug <- str_replace_all(tolower(yeartable$To[i])," ","-")
+#     slug <- ifelse(slug == "bosnia-and-herzegovina", "bosnia-herzegovina", slug)
+#     slug <- ifelse(slug == "macedonia", "north-macedonia", slug)
+#     slug <- ifelse(slug == "serbia-and-montenegro2", "serbia-montenegro", slug)
+#     slug <- ifelse(slug == "serbia-and-montenegro", "serbia-montenegro", slug)
+#     slug <- ifelse(slug == "croatia2", "croatia", slug)
+#     slug <- ifelse(slug == "west-germany", "germany", slug)
+#     url <- paste("https://eurovisionworld.com/eurovision/", toString(year), "/", slug, sep = "")
+#     webpage <- read_html(url)
+#     lyrics <- html_nodes(webpage, xpath = '//*[@id="lyrics_0"]')
+#     lyrics <- gsub(pattern = "<h3>.*</h3>", replacement = "", x = lyrics)
+#     lyrics <- str_replace_all(lyrics, "<br>", " ")
+#     lyrics <- read_html(lyrics)
+#     lyrics <- html_text(lyrics)
+#     lyrics <- str_replace_all(lyrics, "\\?", "\\? ")
+#     lyrics <- str_replace_all(lyrics, "\\.", "\\. ")
+#     lyrics <- str_replace_all(lyrics, "\\!", "\\! ")
+#     lyrics <- str_replace_all(lyrics, "\\(", " \\( ")
+#     lyrics <- str_replace_all(lyrics, "\\)", " \\) ")
+#     lyrics <- str_replace_all(lyrics, "\\n", " ")
+#     yeartable$lyrics[i] <- lyrics
+#   }
+#   return(yeartable)
+# }
+# 
+# # Sadly I can't automate this because the table isn't in the same part of the page for every year.
+# # process2019 <- addyear(2019, '//*[@id="mw-content-text"]/div/table[6]')
+# # process2018 <- addyear(2018, '//*[@id="mw-content-text"]/div/table[6]')
+# # process2017 <- addyear(2017, '//*[@id="mw-content-text"]/div/table[6]')
+# # process2016 <- addyear(2016, '//*[@id="mw-content-text"]/div/table[6]')
+# # process2015 <- addyear(2015, '//*[@id="mw-content-text"]/div/table[6]')
+# # process2014 <- addyear(2014, '//*[@id="mw-content-text"]/div/table[6]')
+# # process2013 <- addyear(2013, '//*[@id="mw-content-text"]/div/table[6]')
+# # process2012 <- addyear(2012, '//*[@id="mw-content-text"]/div/table[5]')
+# # process2011 <- addyear(2011, '//*[@id="mw-content-text"]/div/table[6]')
+# # process2010 <- addyear(2010, '//*[@id="mw-content-text"]/div/table[6]')
+# # process2009 <- addyear(2009, '//*[@id="mw-content-text"]/div/table[6]')
+# # process2008 <- addyear(2008, '//*[@id="mw-content-text"]/div/table[5]')
+# # process2007 <- addyear(2007, '//*[@id="mw-content-text"]/div/table[3]')
+# # process2006 <- addyear(2006, '//*[@id="mw-content-text"]/div/table[3]')
+# # process2005 <- addyear(2005, '//*[@id="mw-content-text"]/div/table[3]')
+# # process2004 <- addyear(2004, '//*[@id="mw-content-text"]/div/table[3]')
+# # process2003 <- addyear(2003, '//*[@id="mw-content-text"]/div/table[3]')
+# # process2002 <- addyear(2002, '//*[@id="mw-content-text"]/div/table[4]')
+# # process2001 <- addyear(2001, '//*[@id="mw-content-text"]/div/table[2]')
+# # process2000 <- addyear(2000, '//*[@id="mw-content-text"]/div/table[3]')
+# # process1999 <- addyear(1999, '//*[@id="mw-content-text"]/div/table[3]')
+# # process1998 <- addyear(1998, '//*[@id="mw-content-text"]/div/table[3]')
+# # process1997 <- addyear(1997, '//*[@id="mw-content-text"]/div/table[3]')
+# # process1996 <- addyear(1996, '//*[@id="mw-content-text"]/div/table[4]')
+# # process1995 <- addyear(1995, '//*[@id="mw-content-text"]/div/table[3]')
+# # process1994 <- addyear(1994, '//*[@id="mw-content-text"]/div/table[3]')
+# # process1993 <- addyear(1993, '//*[@id="mw-content-text"]/div/table[4]')
+# # process1992 <- addyear(1992, '//*[@id="mw-content-text"]/div/table[3]')
+# # process1991 <- addyear(1991, '//*[@id="mw-content-text"]/div/table[4]')
+# # process1990 <- addyear(1990, '//*[@id="mw-content-text"]/div/table[2]')
+# # process1989 <- addyear(1989, '//*[@id="mw-content-text"]/div/table[2]')
+# # process1988 <- addyear(1988, '//*[@id="mw-content-text"]/div/table[3]')
+# # process1987 <- addyear(1987, '//*[@id="mw-content-text"]/div/table[2]')
+# # process1986 <- addyear(1986, '//*[@id="mw-content-text"]/div/table[2]')
+# # process1985 <- addyear(1985, '//*[@id="mw-content-text"]/div/table[4]')
+# # process1984 <- addyear(1984, '//*[@id="mw-content-text"]/div/table[3]')
+# # process1983 <- addyear(1983, '//*[@id="mw-content-text"]/div/table[3]')
+# # process1982 <- addyear(1982, '//*[@id="mw-content-text"]/div/table[2]')
+# # process1981 <- addyear(1981, '//*[@id="mw-content-text"]/div/table[3]')
+# # process1980 <- addyear(1980, '//*[@id="mw-content-text"]/div/table[3]')
+# # process1979 <- addyear(1979, '//*[@id="mw-content-text"]/div/table[2]')
+# # process1978 <- addyear(1978, '//*[@id="mw-content-text"]/div/table[2]')
+# # process1977 <- addyear(1977, '//*[@id="mw-content-text"]/div/table[2]')
+# # process1976 <- addyear(1976, '//*[@id="mw-content-text"]/div/table[2]')
+# # process1975 <- addyear(1975, '//*[@id="mw-content-text"]/div/table[2]')
+# # 
+# # songtitles <- rbind(process2019, process2018, process2017, process2016, process2015, process2014, process2013, process2012, process2012, process2011, process2010, process2009, process2008, process2007, process2006, process2005, process2004, process2003, process2002, process2001, process2000, process1999, process1998, process1997, process1996, process1995, process1994, process1993, process1992, process1991, process1990, process1989, process1988, process1987, process1986, process1985, process1984, process1983, process1982, process1981, process1980, process1979, process1978, process1977, process1976, process1975)
+# 
+# process2019 <- process2019 %>% distinct()
+# 
+# # Wikipedia is not always consistent
+# process2019$Language <- revalue(process2019$Language, c("Serbo-Croatian2" = "Serbo-Croatian", "Italian3" = "Italian", "Germanb" = "German", "Spanisha" = "Spanish", "French2" = "French",  "Spanish1" = "Spanish", "Germana" = "German", "Turkish[a]" = "Turkish", "German1" = "German", "Belarusian[e]" = "Belarusian", "English7" = "English", "Hungarian[c]"   = "Hungarian", "Italian[f]" = "Italian", "English[e]" = "English", "English[a]" = "English", "Slovene[g]" = "Slovene", "English[c]" = "English", "English[b]" = "English", "Croatian" = "Serbo-Croatian", "Dutch1" = "Dutch", "Serbo-Croatian1" = "Serbo-Croatian", "Norwegian1" = "Norwegian", "Hebrew1" = "Hebrew", "German[a]" = "German", "Hebrew[b]" = "Hebrew", "English2" = "English", "English3" = "English", "English4"="English", "Spanish3" = "Spanish", "Bosnian[70][71]" = "Bosnian", "Greek1" = "Greek", "English1" = "English", "Spanish2" = "Spanish", "Serbian[d]" = "Serbian", "English[e]" = "English", "English[g]" = "English", "Italian[h]" = "Italian", "Serbian[c]" = "Serbian]"))
+# 
+# # Country names are even less consistent.
+# process2019$To <- revalue(process2019$To, c("The Netherlands"="Netherlands", "Bosnia & Herzegovina"="Bosnia and Herzegovina", "F.Y.R. Macedonia"="Macedonia", "Serbia & Montenegro"="Serbia and Montenegro"))
+# process2019$To <- revalue(process2019$To, c("West Germany"="Germany", "Serbia and Montenegro2" = "Serbia and Montenegro", "Croatia2" = "Croatia"))
 
-songtitles <- songtitles %>% distinct()
-
-# Wikipedia is not always consistent
-songtitles$Language <- revalue(songtitles$Language, c("Serbo-Croatian2" = "Serbo-Croatian", "Italian3" = "Italian", "Germanb" = "German", "Spanisha" = "Spanish", "French2" = "French",  "Spanish1" = "Spanish", "Germana" = "German", "Turkish[a]" = "Turkish", "German1" = "German", "Belarusian[e]" = "Belarusian", "English7" = "English", "Hungarian[c]"   = "Hungarian", "Italian[f]" = "Italian", "English[e]" = "English", "English[a]" = "English", "Slovene[g]" = "Slovene", "English[c]" = "English", "English[b]" = "English", "Croatian" = "Serbo-Croatian", "Dutch1" = "Dutch", "Serbo-Croatian1" = "Serbo-Croatian", "Norwegian1" = "Norwegian", "Hebrew1" = "Hebrew", "German[a]" = "German", "Hebrew[b]" = "Hebrew", "English2" = "English", "English3" = "English", "English4"="English", "Spanish3" = "Spanish", "Bosnian[70][71]" = "Bosnian", "Greek1" = "Greek", "English1" = "English", "Spanish2" = "Spanish", "Serbian[d]" = "Serbian"))
-
-# Country names are even less consistent.
-scores$To <- revalue(scores$To, c("The Netherlands"="Netherlands", "Bosnia & Herzegovina"="Bosnia and Herzegovina", "F.Y.R. Macedonia"="Macedonia", "Serbia & Montenegro"="Serbia and Montenegro"))
-songtitles$To <- revalue(songtitles$To, c("West Germany"="Germany", "Serbia and Montenegro2" = "Serbia and Montenegro", "Croatia2" = "Croatia"))
-
-write.csv(songtitles, file = "songtitles.csv")
-
+songtitles <- read.csv("songtitles.csv")
 eurovision <- merge(scores, songtitles, by=c("Year", "To"), all.x=TRUE)
-
 capitals <- read.csv("concap.csv")
+
 eurovision <- merge(eurovision, capitals, by.x="From", by.y = "CountryName")
 eurovision <- merge(eurovision, capitals, by.x="To", by.y = "CountryName")
 eurovision$dist <- distGeo(data.frame(eurovision$CapitalLongitude.x, eurovision$CapitalLatitude.x), data.frame(eurovision$CapitalLongitude.y, eurovision$CapitalLatitude.y))
+```
+
+``` {r}
+songtitles <- read.csv("songtitles.csv")
 ```
 
 ``` {r}
@@ -218,6 +225,7 @@ weights <- words$V2%*%t(dfm1)
 len <- ntoken(english$lyrics)
 corpus$sent <- weights[1,]/len
 test <- cbind(english, corpus$sent)
+write.csv(test, "songtitles_eng.csv")
 ```
 
 This squares with the sterotype about Eurovision songs always being love songs.
@@ -265,18 +273,7 @@ ggplot(new, aes(x=Year, y=score)) +  geom_point(aes(y = score)) + geom_errorbar(
 There seems little evidence that the winner (coral) is more cheerful than the average song (black).
 
 ``` {r}
-unique(eurovision$To)
-getlanguage <- function()
-url <- "https://en.wikipedia.org/wiki/"
-urlcountry <- paste(url, unique(eurovision$To)[2], sep = "")
-wikipedia_page<-read_html(urlcountry)
-section_of_wikipedia<-html_node(wikipedia_page, xpath='//*[@id="mw-content-text"]/div/table[1]/tbody/tr[6]/td/a')
-
-language <- section_of_wikipedia %>%
-        html_text()
-
-albania - //*[@id="mw-content-text"]/div/table[1]/tbody/tr[7]/td/a
-armenia - //*[@id="mw-content-text"]/div/table[1]/tbody/tr[6]/td/a
-australia - //*[@id="mw-content-text"]/div/table[1]/tbody/tr[7]/td/a
-austria - //*[@id="mw-content-text"]/div/table[1]/tbody/tr[6]/td/a
+test$Place <- revalue(test$Place, c("23 [D]" = "23", "24 [D]" = "24", "25 [D]" = "25", "26a" = "26"))
+test$Place <- as.numeric(levels(test$Place)[test$Place])
+ggplot(test, aes(x=Place, y=`corpus$sent`)) +  geom_point(aes(y = `corpus$sent`)) + geom_smooth(method="lm", se=TRUE, fullrange=FALSE, level=0.95) + theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) + xlab("Place") + ylab("Average sentiment score of song submitted") +ggtitle("Average Sentiment Score by Year") 
 ```

@@ -1,0 +1,263 @@
+---
+title: "But When Sweden Gets 12 Points From Norway, It's Clearly Just Good Taste: The Determinants of Eurovision Success"
+author: "Lauren Gilbert"
+output: pdf_document
+---
+
+```{r, setup, include=FALSE}
+library(stringi)
+library(openxlsx)
+library(plyr)
+library(dplyr)
+library(rvest)
+library(xml2)
+library(geosphere)
+library(stringr)
+library(ggplot2)
+library(rjson)
+library(quanteda)
+library(wordcloud)
+library(stm)
+library(igraph)
+library(stargazer)
+library(estimatr)
+library(texreg)
+library(tidyverse)
+```
+
+``` {r}
+set.seed(1)
+justsongs <- read.csv("songtitles.csv")
+
+fullscores <- read.csv("fullscores.csv")
+fullscores$To <- as.factor(fullscores$To)
+fullscores$From <- as.factor(fullscores$From)
+fullscores$Place <- as.numeric(levels(fullscores$Place)[fullscores$Place])
+fullscores$Draw <- as.numeric(levels(fullscores$Draw)[fullscores$Draw])
+fullscores$Language <- as.factor(fullscores$Language)
+fullscores$Jury.or.Televoting <- as.factor(fullscores$Jury.or.Televoting)
+
+eighties <- subset(fullscores, Year > 1979 & Year < 1990)
+nineties <- subset(fullscores, Year > 1989 & Year < 2000)
+twothousands <- subset(fullscores, Year > 1999 & Year < 2010)
+twentytens <- subset(fullscores, Year > 2010)
+
+eighties$correctnormalization <- eighties$Points.x / 58
+nineties$correctnormalization <- nineties$Points.x / 58
+twothousands$correctnormalization <- twothousands$Points.x / 58
+twentytens$correctnormalization <- ifelse(as.numeric(twentytens$Year) < 2016, twentytens$Points.x / 58, twentytens$Points.x / 116)
+
+fullscores$correctnormalization <- ifelse(as.numeric(fullscores$Year) < 2016, fullscores$Points.x / 58, fullscores$Points.x / 116)
+
+# normalized points exchanged = total of normalized points / number of years in which this dyad occurs
+fullscores <- fullscores %>%
+  dplyr::group_by(To, From) %>%
+  dplyr::mutate(avg = sum(correctnormalization) / n_distinct(Year))
+
+eighties <- eighties %>%
+  dplyr::group_by(To, From) %>%
+  dplyr::mutate(avg = sum(correctnormalization) / n_distinct(Year))
+
+nineties <- nineties %>%
+  dplyr::group_by(To, From) %>%
+  dplyr::mutate(avg = sum(correctnormalization) / n_distinct(Year))
+
+twothousands <- twothousands %>%
+  dplyr::group_by(To, From) %>%
+  dplyr::mutate(avg = sum(correctnormalization) / n_distinct(Year))
+
+twentytens <- twentytens %>%
+  dplyr::group_by(To, From) %>%
+  dplyr::mutate(avg = sum(correctnormalization) / n_distinct(Year))
+
+
+fullscores <- fullscores %>% dplyr::group_by(To, From) %>% dplyr::mutate(instances = n_distinct(Year))
+```
+
+This is broken.
+``` {r}
+eighties <- eighties %>% dplyr::group_by(To, From) %>% dplyr::mutate(instances = n_distinct(Year))
+nineties <- nineties %>% dplyr::group_by(To, From) %>% dplyr::mutate(instances = n_distinct(Year))
+twothousands <- twothousands %>% dplyr::group_by(To, From) %>% dplyr::mutate(instances = n_distinct(Year))
+twentytens <- twentytens %>% dplyr::group_by(To, From) %>% dplyr::mutate(instances = n_distinct(Year))
+
+dyads <- data.frame(fullscores$From, fullscores$To, fullscores$Year, fullscores$correctnormalization, fullscores$avg, fullscores$instances)
+
+dyadseighties <- data.frame(eighties$From, eighties$To, eighties$Year, eighties$correctnormalization, eighties$avg, eighties$instances)
+dyadsnineties <- data.frame(nineties$From, nineties$To, nineties$Year, nineties$correctnormalization, nineties$avg, nineties$instances)
+dyadstwothousands <- data.frame(twothousands$From, twothousands$To, twothousands$Year, twothousands$correctnormalization, twothousands$avg, twothousands$instances)
+dyadstwentytens <- data.frame(twentytens$From, twentytens$To, twentytens$Year, twentytens$correctnormalization, twentytens$avg, twentytens$instances)
+
+dyadseighties<- subset(dyadseighties, eighties.avg > 0.15)
+dyadsnineties <- subset(dyadsnineties, nineties.avg > 0.15)
+dyadstwothousands <- subset(dyadstwothousands, twothousands.avg > 0.15)
+dyadstwentytens <- subset(dyadstwentytens, twentytens.avg > 0.15)
+
+dyads <- subset(dyads, dyads$fullscores.instances > 4)
+dyadseighties <- subset(dyadseighties, dyadseighties$eighties.instances > 1)
+dyadsnineties <- subset(dyadsnineties, dyadsnineties$nineties.instances > 1)
+dyadstwothousands <- subset(dyadstwothousands, dyadstwothousands$twothousands.instances > 1)
+dyadstwentytens <- subset(dyadstwentytens, dyadstwentytens$twentytens.instances > 1)
+```
+
+``` {r}
+set.seed(1)
+par(bg=NA)
+dyads$fullscores.To <- as.character(dyads$fullscores.To)
+dyads$fullscores.From <- as.character(dyads$fullscores.From)
+nodes <- unique(c(unique(dyads$fullscores.To), unique(dyads$fullscores.From)))
+net <- graph_from_data_frame(d=dyads, vertices=nodes, directed=T)
+E(net)$weight <- dyads$scores*5
+png("Plot4_new.png", width = 6, height = 6, units = 'in', res = 300)
+par(bg=NA)
+plot(net, edge.arrow.size=.2, edge.color="white", vertex.color="darkblue", vertex.frame.color="#ffffff", vertex.label=V(net)$nodes, vertex.label.color="white", edge.width=E(net)$weight, size = 300, vertex.label.cex = 0.5)
+dev.off()
+```
+
+``` {r}
+set.seed(1)
+par(bg=NA)
+png("eighties_new.png", width = 6, height = 6, units = 'in', res = 300)
+par(bg=NA)
+dyadseighties$eighties.To <- as.character(dyadseighties$eighties.To)
+dyadseighties$eighties.From <- as.character(dyadseighties$eighties.From)
+nodes <- unique(c(unique(dyadseighties$fullscores.To), unique(dyadseighties$fullscores.From)))
+net <- graph_from_data_frame(d=dyadseighties, vertices=nodes, directed=T)
+E(net)$weight <- dyadseighties$scores*5
+par(bg=NA)
+plot(net, edge.arrow.size=.2, edge.color="white", vertex.color="darkblue", vertex.frame.color="#ffffff", vertex.label=V(net)$nodes, vertex.label.color="white", edge.width=E(net)$weight, size = 300, vertex.label.cex = 0.8)
+dev.off()
+```
+``` {r}
+set.seed(1)
+par(bg=NA)
+png("nineties_new.png", width = 6, height = 6, units = 'in', res = 300)
+par(bg=NA)
+dyadsnineties$nineties.To <- as.character(dyadsnineties$nineties.To)
+dyadsnineties$nineties.From <- as.character(dyadsnineties$nineties.From)
+nodes <- unique(c(unique(dyadsnineties$fullscores.To), unique(dyadsnineties$fullscores.From)))
+net <- graph_from_data_frame(d=dyadsnineties, vertices=nodes, directed=T)
+E(net)$weight <- dyadsnineties$scores*5
+par(bg=NA)
+plot(net, edge.arrow.size=.2, edge.color="white", vertex.color="darkblue", vertex.frame.color="#ffffff", vertex.label=V(net)$nodes, vertex.label.color="white", edge.width=E(net)$weight, size = 300, vertex.label.cex = 0.8)
+dev.off()
+```
+``` {r}
+set.seed(1)
+par(bg=NA)
+png("twothousands_new.png", width = 6, height = 6, units = 'in', res = 300)
+par(bg=NA)
+dyadstwothousands$twothousands.To <- as.character(dyadstwothousands$twothousands.To)
+dyadstwothousands$twothousands.From <- as.character(dyadstwothousands$twothousands.From)
+nodes <- unique(c(unique(dyadstwothousands$fullscores.To), unique(dyadstwothousands$fullscores.From)))
+net <- graph_from_data_frame(d=dyadstwothousands, vertices=nodes, directed=T)
+E(net)$weight <- dyadstwothousands$scores*5
+par(bg=NA)
+plot(net, edge.arrow.size=.2, edge.color="white", vertex.color="darkblue", vertex.frame.color="#ffffff", vertex.label=V(net)$nodes, vertex.label.color="white", edge.width=E(net)$weight, size = 300, vertex.label.cex = 0.8)
+dev.off()
+```
+``` {r}
+set.seed(1)
+par(bg=NA)
+png("twentytens_new.png", width = 6, height = 6, units = 'in', res = 300)
+par(bg=NA)
+dyadstwentytens$twentytens.To <- as.character(dyadstwentytens$twentytens.To)
+dyadstwentytens$twentytens.From <- as.character(dyadstwentytens$twentytens.From)
+nodes <- unique(c(unique(dyadstwentytens$fullscores.To), unique(dyadstwentytens$fullscores.From)))
+net <- graph_from_data_frame(d=dyadstwentytens, vertices=nodes, directed=T)
+E(net)$weight <- dyadstwentytens$scores*5
+par(bg=NA)
+plot(net, edge.arrow.size=.2, edge.color="white", vertex.color="darkblue", vertex.frame.color="#ffffff", vertex.label=V(net)$nodes, vertex.label.color="white", edge.width=E(net)$weight, size = 300, vertex.label.cex = 0.8)
+dev.off()
+```
+
+
+``` {r}
+english <- subset(justsongs, justsongs$Language == "English")
+english$lyrics <- as.character(english$lyrics)
+corpus <- corpus(english$lyrics, docvars=english)
+doc.features <- dfm(corpus, remove=c(stopwords("english")), stem=F, remove_punct=T)
+textplot_wordcloud(doc.features)
+```
+
+``` {r}
+fullscores$seventies <- ifelse(fullscores$Year < 1979, 1, 0)
+fullscores$eighties <- ifelse(fullscores$Year > 1979 & fullscores$Year < 1990, 1, 0)
+fullscores$nineties <- ifelse(fullscores$Year > 1989 & fullscores$Year < 2000, 1, 0)
+fullscores$twothousands <- ifelse(fullscores$Year > 1999 & fullscores$Year < 2010, 1, 0)
+fullscores$twentytens <- ifelse(fullscores$Year > 2010, 1, 0)
+```
+
+``` {r}
+countries <- read.csv("COW country codes.csv")
+countries <- countries %>% distinct(CCode, StateNme)
+fullscores <- merge(fullscores, countries, by.x = "To", by.y = "StateNme")
+fullscores <- merge(fullscores, countries, by.x = "From", by.y = "StateNme", suffixes = c(".To", ".From"))
+
+alliances <- read.csv("version4.1_csv/alliance_v4.1_by_dyad_yearly.csv")
+alliances <- alliances %>% distinct(ccode1, ccode2, year)
+alliances$ally <- 1
+alliances <- subset(alliances, alliances$year > 1975)
+
+dyad_mids <- read.dta13("../Data/DYDMID3.1/dyadic mid 3.1_may 2018.dta")
+locations <- read.csv("../Data/MIDLOC_2.1/MIDLOCA_2.1.csv")
+mid_loc <- left_join(dyad_mids, locations, by = c("disno" = "dispnum"))
+
+europe_mids <- subset(mid_loc, mid_loc$year.x > 1975)
+europe_mids <- europe_mids %>% distinct(statea, stateb, year.x)
+europe_mids$mid <- 1
+  
+fullscores <- left_join(fullscores, alliances, by = c("CCode.To" = "ccode1", "CCode.From" = "ccode2", "Year" = "year"))
+fullscores$ally[is.na(fullscores$ally)] <- 0
+
+fullscores <- left_join(fullscores, europe_mids, by = c("CCode.To" = "statea", "CCode.From" = "stateb", "Year" = "year.x"))
+fullscores$mid[is.na(fullscores$mid)] <- 0
+```
+
+``` {r}
+fullscores$dist <- fullscores$dist / 1000
+fullscores$english <- ifelse(fullscores$Language == "English", 1, 0)
+data.frame(fullscores$To[is.na(fullscores$Draw)], fullscores$Year[is.na(fullscores$Draw)])
+fullscores$dyad <- paste0(fullscores$To, fullscores$From)
+storethis <- lm(data = fullscores, correctnormalization ~  To +  as.numeric(Draw) +  english + To*From + Year +  dist + neighbor + seventies * To + eighties * To + nineties * To + twothousands * To + twentytens * To + ally + mid)
+summary(storethis)
+screenreg(storethis, file = "output.txt")
+```
+
+``` {r}
+sort(storethis$coefficients)
+order(-storethis$coefficients)
+```
+
+``` {r}
+lm(Place ~ english + Draw, data= fullscores)
+storethis$coefficients[names(storethis$coefficients) == "english"]
+storethis$coefficients[names(storethis$coefficients) == "as.numeric(Draw)"]*26
+storethis$coefficients[names(storethis$coefficients) == "mid"]*2
+```
+
+``` {r}
+no_decades <- lm(data = fullscores, correctnormalization ~  To +  as.numeric(Draw) +  english + To*From + Year +  dist + neighbor)
+
+no_neigh <- lm(data = fullscores, correctnormalization ~  To +  From + To*From + Year)
+summary(no_neigh)
+
+no_interact <- lm(data = fullscores, correctnormalization ~  To +  as.numeric(Draw) +  english + Year +  dist + neighbor)
+summary(no_interact)
+sort(no_interact$coefficients)
+```
+
+``` {r}
+fullscores <- fullscores %>%
+  dplyr::group_by(Year, To) %>%
+  dplyr::mutate(voting = n_distinct(From))
+
+mean(fullscores$voting)
+mean(fullscores$voting) * storethis$coefficients[names(storethis$coefficients) == "english"] * 58
+58 * storethis$coefficients[names(storethis$coefficients) == "ally"]
+```
+
+``` {r}
+place <- lm(data = fullscores, Place ~  To +  as.numeric(Draw) +  english + To*From + Year +  dist + neighbor + seventies * To + eighties * To + nineties * To + twothousands * To + twentytens * To + ally)
+screenreg(place, file = "place.txt")
+```

@@ -16,7 +16,6 @@ library(ggplot2)
 library(rjson)
 library(quanteda)
 library(wordcloud)
-library(lettercase)
 library(stm)
 ```
 
@@ -108,9 +107,11 @@ predict.test
 tab_test <- table(docvars(dfmat_test, "winner"), predict.test)
 
 #recall
-diag(tab_test)/colSums(tab_test)
+recall <- diag(tab_test)/colSums(tab_test)[1]
 #precision
-diag(tab_test)/rowSums(tab_test)
+precision <- diag(tab_test)/rowSums(tab_test)[1]
+f1 <- (precision * recall) / (precision + recall)
+f1
 ```
 
 Thus, its predicted top five finishers are Malta (placed 16), Russia (placed 3), North Macedonia (placed 8),  and the UK (placed 23).

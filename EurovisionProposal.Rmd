@@ -42,8 +42,11 @@ A database of scores 1975-2018 is available on [Kaggle](https://www.kaggle.com/d
 ``` {r echo=FALSE}
 library(openxlsx)
 library(dplyr)
-scores <- read.xlsx("eurovision_song_contest_1975_2018v2.xlsx")
-scores <- subset(scores, scores$Final == "f")
+scores <- read.xlsx("eurovision_song_contest_1975_2019.xlsx")
+scores <- subset(scores, scores$`(semi-).final` == "f")
+scores$To <- scores$To.country
+scores$From <- scores$From.country
+scores<-scores[is.na(scores$Duplicate),]
 ```
 
 For covariates, we will use the following:
@@ -63,12 +66,12 @@ For fun, we create a histogram of the countries that have won most often:
 ``` {r echo=FALSE}
 scoretotal <- scores %>% 
   group_by(Year) %>% 
-  summarise(Points = sum(Points))
+  dplyr:::summarise(Points = sum(Points))
 scorebycountry <- scores %>% 
   group_by(Year, To) %>% 
-  summarise(Points = sum(Points))
+  dplyr:::summarise(Points = sum(Points))
 scores <- right_join(scoretotal, scorebycountry, by="Year")
-sortedscores <- scores %>% group_by(Year) %>% arrange(desc(Points.y), .by_group = TRUE)
+sortedscores <- scores %>% dplyr:::group_by(Year) %>% arrange(desc(Points.y), .by_group = TRUE)
 
 winners <- scores %>% group_by(Year) %>% filter(Points.y == max(Points.y))
 
@@ -78,11 +81,6 @@ ggplot(winners, aes(x=winners$To)) +
   theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) + xlab("Countries") + ylab("Number of wins")
 ```
 
-``` {r echo=FALSE}
-library(rvest)
-url <- "https://en.wikipedia.org/wiki/Eurovision_Song_Contest_2018"
-eurovision2018 <- read_html(url)
-```
 # Out-of-sample prediction
 
 Eurovision 2019 will be held on 14 - 18 May.  I can test how successful my predictors of Eurovision success are against real (currently unknowable) data.
