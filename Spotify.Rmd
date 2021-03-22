@@ -13,6 +13,53 @@ library(mice)
 library(stringi)
 ```
 
+```{r}
+library(rvest)
+
+remove_footnotes <- function(dat)
+{
+  as.numeric(gsub("[a-z]", "", dat))
+}
+
+get_table <- function(year, xpath)
+{
+  str <- paste("https://en.wikipedia.org/wiki/Eurovision_Song_Contest_", toString(year), sep = "")
+  yeartable<-read_html(str) %>% html_node(xpath=xpath) %>% html_table()
+  colnames(yeartable) <- c("Draw", "To", "Artist", "Song", "Language", "Place", "Points")
+  yeartable$Year <- as.numeric(year)
+  return(yeartable)
+}
+
+semifinal <- function(year, xpath1, xpath2)
+{
+  yeartable1 <- get_table(year, xpath1)
+  yeartable1$Type <- "sf1"
+  yeartable2 <- get_table(year, xpath2)
+  yeartable2$Type <- "sf2"
+  semi <- rbind(yeartable1, yeartable2)
+  return(semi)
+}
+
+final <- function(year, xpath)
+{
+  yeartable <- get_table(year, xpath)
+  yeartable$Type <- "f"
+  yeartable$Place <- remove_footnotes(yeartable$Place)
+  yeartable$Draw <- as.numeric(gsub("\\[.+\\]", "", yeartable$Draw))
+  return(yeartable)
+}
+
+years <- c(2009:2011, 2013:2019)
+
+dat <- lapply(years, semifinal, xpath1 = '//*[@id="mw-content-text"]/div[1]/table[4]', xpath2 = '//*[@id="mw-content-text"]/div[1]/table[5]') %>% bind_rows()
+dat <- rbind(dat, lapply(years, final, xpath = '//*[@id="mw-content-text"]/div[1]/table[6]') %>% bind_rows())
+
+years <- c(2008, 2012)
+dat <- rbind(dat, lapply(years, semifinal, xpath1 = '//*[@id="mw-content-text"]/div[1]/table[3]', xpath2 = '//*[@id="mw-content-text"]/div[1]/table[4]') %>% bind_rows())
+
+dat <- rbind(dat, lapply(years, final, xpath = '//*[@id="mw-content-text"]/div[1]/table[5]') %>% bind_rows())
+```
+
 ``` {r}
 rename_country <- function(dat, old_name, new_name)
 {
@@ -28,7 +75,7 @@ scores <- rename_country(scores, "Bosnia & Herzegovina", "Bosnia and Herzegovina
 scores <- rename_country(scores, "F.Y.R. Macedonia", "North Macedonia")
 scores <- rename_country(scores, "The Netherlands", "Netherlands")
 
-songtitles <- read.csv("songtitles.csv") %>% select(Draw, To, Artist, Song, Place, Points, Year, Language)
+songtitles <- dat
 songtitles$To[songtitles$To == "Macedonia"] <- "North Macedonia"
 scores <- left_join(scores, songtitles, by = c("To", "Year"))
 
@@ -37,7 +84,11 @@ scores$Artist <- gsub(" and ", " & ", scores$Artist)
 scores$Artist <- gsub("\\[.+\\]", "", scores$Artist)
 scores$Language <- gsub("\\[.+\\]", "", scores$Language)
 scores$Draw <- gsub("\\[.+\\]", "", scores$Draw)
+scores$Place <- gsub("\\[.+\\]", "", scores$Place)
 scores$Place <- as.numeric(as.character(scores$Place))
+scores$Draw <- as.numeric(as.character(scores$Draw))
+
+scores$Artist[scores$Artist == "o'g3ne"] <- "og3ne"
 ```
 
 ``` {r}
@@ -77,7 +128,7 @@ complete_years_12_19$Artist[complete_years_12_19$Artist == "claudia pascoal & is
 complete_years_12_19$Artist[complete_years_12_19$Artist == "amaia & alfred garcia"] <- "amaia & alfred"
 complete_years_12_19$Artist[complete_years_12_19$Artist == "isaiah firebrace"] <- "isaiah"
 complete_years_12_19$Artist[complete_years_12_19$Artist == "ilinca & alex florea"] <- "ilinca ft. alex florea"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "og3ne"] <- "o'g3ne"
+complete_years_12_19$Artist[complete_years_12_19$Artist == "og3ne"] <- "og3ne"
 complete_years_12_19$Artist[complete_years_12_19$Artist == "anja nissen"] <- "anja"
 complete_years_12_19$Artist[complete_years_12_19$Artist == "papai joci"] <- "joci papai"
 complete_years_12_19$Artist[complete_years_12_19$Artist == "minus-one"] <- "minus one"
@@ -96,7 +147,7 @@ complete_years_12_19$Artist[complete_years_12_19$Artist == "buranovskie babushki
 ```
 
 ``` {r}
-partial_years_09_12$Artist[partial_years_09_12$Artist == "ovi & paula seling"] <- "paula seling & ovi"
+partial_years_09_12$Artist[partial_years_09_12$Artist == "paula seling & ovi"] <- "paula seling &  ovi"
 partial_years_09_12$Artist[partial_years_09_12$Artist == "giorgos alkaios"] <- "giorgos alkaios & friends"
 partial_years_09_12$Artist[partial_years_09_12$Artist == "peter nalitch"] <- "peter nalitch & friends" 
 partial_years_09_12$Artist[partial_years_09_12$Artist == "ell/nikki"] <- "ell & nikki"
@@ -125,6 +176,8 @@ Missing:
 ``` {r}
 year_set <- rbind(complete_years_12_19, partial_years_09_12)
 
+temp <- subset(year_set, duplicated(year_set$Artist))
+
 scores_with_musical <- left_join(scores, year_set, by = "Artist")
 fixthis <- subset(scores_with_musical, !complete.cases(scores_with_musical))
 unique(fixthis$Artist)
@@ -140,14 +193,6 @@ sums <- sums %>% filter(Year > 2015) %>%
   mutate(year_total = sum(Points.x))
 ```
 
-``` {r}
-png("dance.png")
-ggplot(data = scores_with_musical, aes(x = Place, y = danceability)) + geom_point() + theme_bw() + geom_smooth(method = 'lm') + xlab("Place in Eurovision Final") + ylab("Danceability")
-dev.off()
-
-
-ggplot(data = scores_with_musical, aes(x = Place, y = tempo)) + geom_point() + theme_bw() + geom_smooth(method = 'lm')
-```
 
 
 2021: 0xGk0xR6fI88NsmiHZZMPE
