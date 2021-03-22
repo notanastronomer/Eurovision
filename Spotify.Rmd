@@ -1,0 +1,92 @@
+---
+title: "Spotify Eurovision"
+author: "Lauren Gilbert"
+output: pdf_document
+---
+
+``` {r}
+library(unpivotr)
+library(devtools)
+library(spotifyr)
+library(tidyverse)
+library(mice)
+library(stringi)
+```
+
+``` {r}
+rename_country <- function(dat, old_name, new_name)
+{
+  dat$To[dat$To == old_name] <- new_name
+  dat$From[dat$From == old_name] <- new_name
+  return(dat)
+}
+
+scores <- readxl::read_xlsx("eurovision_song_contest_1975_2019.xlsx")
+scores <- scores %>% filter(Type == 'f') %>% filter(Points > 0) %>% filter(Year > 2009) %>% select(Year, Points, From, To, Jury)
+
+scores <- rename_country(scores, "Bosnia & Herzegovina", "Bosnia and Herzegovina")
+scores <- rename_country(scores, "F.Y.R. Macedonia", "North Macedonia")
+scores <- rename_country(scores, "The Netherlands", "Netherlands")
+
+songtitles <- read.csv("songtitles.csv") %>% select(Draw, To, Artist, Song, Place, Points, Year, Language)
+songtitles$To[songtitles$To == "Macedonia"] <- "North Macedonia"
+scores <- left_join(scores, songtitles, by = c("To", "Year"))
+```
+
+``` {r}
+Sys.setenv(SPOTIFY_CLIENT_ID = 'cd564f2f03e147f5a7c7a6eb40997280')
+Sys.setenv(SPOTIFY_CLIENT_SECRET = '6a6c85ff2d0d407093eae58096d691ce')
+access_token <- get_spotify_access_token()
+
+get_spotify_year <- function(playlist)
+{
+  eurovision <- get_playlist_audio_features("spotify", playlist, authorization = get_spotify_access_token())
+  for (i in 1:length(eurovision$track.artists))
+  {
+    if (length(eurovision$track.artists[[i]]$name) > 1)
+    {
+      eurovision$track.artists[[i]]$name[1] <- paste(eurovision$track.artists[[i]]$name[1],  "&", eurovision$track.artists[[i]]$name[2])
+    }
+  }
+
+  eurovision$Artist <- do.call(rbind, (lapply(eurovision$track.artists, function(x) x[1,])))$name
+  spotify_data <- eurovision %>% select(Artist, track.album.name, danceability, energy, key, loudness, mode, speechiness, acousticness, instrumentalness, liveness, valence, tempo, track.duration_ms, track.name, key_name, mode_name)
+  spotify_data$Artist <- tolower(stri_trans_general(str = spotify_data$Artist, id = "Latin-ASCII"))
+  return(spotify_data)
+}
+
+playlists <- c("3ZdQUt8Tmtt7oOU8UM2koe", "5sxwk5T34E2l2Ng02lipHS", "6Ey20ccpxRCd0AlaIuGJrB")
+euro1319 <- as.data.frame(do.call(rbind, lapply(playlists, get_spotify_year)))
+```
+
+``` {r}
+euro1319$Artist[euro1319$Artist == "miki nunez"] <- "miki"
+euro1319$Artist[euro1319$Artist == "zalagasper"] <- "zala kralj & gasper santl"
+euro1319$Artist[euro1319$Artist == "claudia pascoal & isaura"] <- "claudia pascoal"
+euro1319$Artist[euro1319$Artist == "amaia & alfred garcia"] <- "amaia & alfred"
+euro1319$Artist[euro1319$Artist == "isaiah firebrace"] <- "isaiah"
+euro1319$Artist[euro1319$Artist == "ilinca & alex florea"] <- "ilinca ft. alex florea"
+euro1319$Artist[euro1319$Artist == "og3ne"] <- "o'g3ne"
+euro1319$Artist[euro1319$Artist == "anja nissen"] <- "anja"
+euro1319$Artist[euro1319$Artist == "papai joci"] <- "joci papai"
+
+scores_subset <- subset(scores, Year > 2016 & Year < 2020)
+scores_subset$Artist <- tolower(stri_trans_general(str = scores_subset$Artist, id = "Latin-ASCII"))
+scores_subset$Artist <- gsub("\\[.\\]", "", scores_subset$Artist)
+scores_with_musical <- left_join(scores_subset, euro1319, by = "Artist")
+fixthis <- subset(scores_with_musical, !complete.cases(scores_with_musical))
+unique(fixthis$Artist)
+```
+
+2021: 0xGk0xR6fI88NsmiHZZMPE
+2020: 0IyJJbmF3vp5nX6j4FFeDO
+2019: 3ZdQUt8Tmtt7oOU8UM2koe
+2018: 5sxwk5T34E2l2Ng02lipHS
+2017: 6Ey20ccpxRCd0AlaIuGJrB
+2016: 0VEtwmjx3FK77jWLlI16EV
+2015: 1HtXxHLxLvC5ePfd0hQC7U
+2014: 3svTn0yv1hfv8vzMzVd31D
+2013: 2YPpTFZPn6s1y7q8PFRLv7
+2012: 5tjy5qbWxaFFFTseRDptC7
+2011: 4HPdL5jwsxKnh7RTAwq9hF
+2010: 3Vf3E8WavFCRLGF3a97nR9
