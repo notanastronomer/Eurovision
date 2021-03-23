@@ -11,6 +11,7 @@ library(spotifyr)
 library(tidyverse)
 library(mice)
 library(stringi)
+library(lubridate)
 ```
 
 ```{r}
@@ -49,15 +50,17 @@ final <- function(year, xpath)
   return(yeartable)
 }
 
-years <- c(2009:2011, 2013:2019)
+years <- c(2010:2011, 2013:2019)
 
 dat <- lapply(years, semifinal, xpath1 = '//*[@id="mw-content-text"]/div[1]/table[4]', xpath2 = '//*[@id="mw-content-text"]/div[1]/table[5]') %>% bind_rows()
 dat <- rbind(dat, lapply(years, final, xpath = '//*[@id="mw-content-text"]/div[1]/table[6]') %>% bind_rows())
 
-years <- c(2008, 2012)
+years <- c(2012)
 dat <- rbind(dat, lapply(years, semifinal, xpath1 = '//*[@id="mw-content-text"]/div[1]/table[3]', xpath2 = '//*[@id="mw-content-text"]/div[1]/table[4]') %>% bind_rows())
 
 dat <- rbind(dat, lapply(years, final, xpath = '//*[@id="mw-content-text"]/div[1]/table[5]') %>% bind_rows())
+
+write.csv(dat, "scraped.csv")
 ```
 
 ``` {r}
@@ -69,7 +72,7 @@ rename_country <- function(dat, old_name, new_name)
 }
 
 scores <- readxl::read_xlsx("eurovision_song_contest_1975_2019.xlsx")
-scores <- scores %>% filter(Type == 'f') %>% filter(Points > 0) %>% filter(Year > 2007) %>% select(Year, Points, From, To, Jury)
+scores <- scores %>% filter(Type == 'f') %>% filter(Points > 0) %>% filter(Year > 2009) %>% select(Year, Points, From, To, Jury)
 
 scores <- rename_country(scores, "Bosnia & Herzegovina", "Bosnia and Herzegovina")
 scores <- rename_country(scores, "F.Y.R. Macedonia", "North Macedonia")
@@ -108,13 +111,13 @@ get_spotify_year <- function(playlist)
   }
 
   eurovision$Artist <- do.call(rbind, (lapply(eurovision$track.artists, function(x) x[1,])))$name
-  spotify_data <- eurovision %>% select(Artist, track.album.name, danceability, energy, key, loudness, mode, speechiness, acousticness, instrumentalness, liveness, valence, tempo, track.duration_ms, track.name, key_name, mode_name)
+  spotify_data <- eurovision %>% select(Artist, track.album.name, danceability, energy, key, loudness, mode, speechiness, acousticness, instrumentalness, liveness, valence, tempo, track.duration_ms, track.name, key_name, mode_name, track.album.release_date)
   spotify_data$Artist <- tolower(stri_trans_general(str = spotify_data$Artist, id = "Latin-ASCII"))
   spotify_data$Artist <- gsub(" and ", " & ", spotify_data$Artist)
   return(spotify_data)
 }
 
-playlists_complete <- c("3ZdQUt8Tmtt7oOU8UM2koe", "5sxwk5T34E2l2Ng02lipHS", "6Ey20ccpxRCd0AlaIuGJrB", "0VEtwmjx3FK77jWLlI16EV", "1HtXxHLxLvC5ePfd0hQC7U", "2ldMrwGLibJCxPrqvCx1p5", "2YPpTFZPn6s1y7q8PFRLv7", "1GEIW1EK1myFWQVgzkQo6Z")
+playlists_complete <- c("3ZdQUt8Tmtt7oOU8UM2koe", "5sxwk5T34E2l2Ng02lipHS", "6Ey20ccpxRCd0AlaIuGJrB", "38ylmIPl9vHr2wV3Z9MLhf", "5ZmgTCsMieTC74swryPXIQ", "2ldMrwGLibJCxPrqvCx1p5", "2YPpTFZPn6s1y7q8PFRLv7", "1GEIW1EK1myFWQVgzkQo6Z")
 playlists_partial <- c("4HPdL5jwsxKnh7RTAwq9hF", "5VqYaQDMWRzR5bOCKBvLF8", "0yoZw30ogd6gENBtx0q0HS", "1X6om0uyKtmxblTN6JK5dj")
 
 complete_years_12_19 <- as.data.frame(do.call(rbind, lapply(playlists_complete, get_spotify_year)))
@@ -144,6 +147,8 @@ complete_years_12_19$Artist[complete_years_12_19$Artist == "birgit oigemeel"] <-
 complete_years_12_19$Artist[complete_years_12_19$Artist == "el sueno de morfeo"] <- "esdm"
 complete_years_12_19$Artist[complete_years_12_19$Artist == "pasha parfeni"] <- "pasha parfeny"
 complete_years_12_19$Artist[complete_years_12_19$Artist == "buranovskie babushki"] <- "buranovskiye babushki"
+complete_years_12_19$Artist[complete_years_12_19$Artist == "nenad knezevic knez"] <- "knez"
+
 ```
 
 ``` {r}
@@ -173,41 +178,91 @@ Missing:
 2011: 2
 2010: 1
 
+This is unbelievably grungy.
 ``` {r}
 year_set <- rbind(complete_years_12_19, partial_years_09_12)
+year_set <- year_set[-c(182, 214, 244, 345, 375, 390, 452, 470), ]
 
-temp <- subset(year_set, duplicated(year_set$Artist))
+list_artists <- year_set$Artist[duplicated(year_set$Artist)]
+year_set$repeat_artist <- ifelse(year_set$Artist %in% list_artists, 1, 0)
 
-scores_with_musical <- left_join(scores, year_set, by = "Artist")
-fixthis <- subset(scores_with_musical, !complete.cases(scores_with_musical))
-unique(fixthis$Artist)
+year_set_without_repeats <- subset(year_set, year_set$repeat_artist == 0)
+year_set_repeats <- subset(year_set, year_set$repeat_artist == 1)
+
+year_set_repeats$Year <- year(year_set_repeats$track.album.release_date)
+year_set_repeats$Year[year_set_repeats$Artist == "kaliopi" & year_set_repeats$Year == 2020] <- 2012
+
+scores_with_musical <- left_join(scores, year_set_without_repeats, by = "Artist")
+
+not_yet_merged <- subset(scores_with_musical, !complete.cases(scores_with_musical))
+scores_with_musical <- subset(scores_with_musical, complete.cases(scores_with_musical))
+
+not_yet_merged <- not_yet_merged[c(1:12)]
+
+multiples <- left_join(not_yet_merged, year_set_repeats, by = c("Artist", "Year"))
+
+scores_with_musical <- rbind(scores_with_musical, multiples)
 ```
 
 ``` {r}
-sums <- scores_with_musical %>% filter(Year > 2015) %>%
-  group_by(Year, To) %>% 
-  mutate(total = sum(Points.x)) %>% ungroup()
-
-sums <- sums %>% filter(Year > 2015) %>%
-  group_by(Year) %>% 
-  mutate(year_total = sum(Points.x))
+scores_with_musical$english <- ifelse(grepl("English", scores_with_musical$Language, fixed = TRUE), 1, 0)
+scores_with_musical$multi <- ifelse(grepl(",", scores_with_musical$Language, fixed = TRUE), 1, 0)
+scores_with_musical$not_english <- ifelse(scores_with_musical$Language == "English", 0, 1)
 ```
 
+``` {r}
+scores_with_musical$key <- paste0(scores_with_musical$key_name, " ", scores_with_musical$mode_name)
+unique(scores_with_musical$key)
+```
 
+``` {r}
+scores_with_musical$NPoints <- ifelse(scores_with_musical$Year > 2015, scores_with_musical$Points.x / 2, scores_with_musical$Points.x)
 
-2021: 0xGk0xR6fI88NsmiHZZMPE
-2020: 0IyJJbmF3vp5nX6j4FFeDO
+write.csv(scores_with_musical, "fulldata.csv")
+```
 
-2019: 3ZdQUt8Tmtt7oOU8UM2koe
-2018: 5sxwk5T34E2l2Ng02lipHS
-2017: 6Ey20ccpxRCd0AlaIuGJrB
-2016: 0VEtwmjx3FK77jWLlI16EV
-2015: 1HtXxHLxLvC5ePfd0hQC7U
-2014: 2ldMrwGLibJCxPrqvCx1p5
-2013: 2YPpTFZPn6s1y7q8PFRLv7
-2012: 1GEIW1EK1myFWQVgzkQo6Z
+``` {r}
+get_table_without_scores <- function(year, xpath)
+{
+  str <- paste("https://en.wikipedia.org/wiki/Eurovision_Song_Contest_", toString(year), sep = "")
+  yeartable<-read_html(str) %>% html_node(xpath=xpath) %>% html_table()
+  colnames(yeartable) <- c("Draw", "To", "Artist", "Song", "Language")
+  yeartable$Year <- as.numeric(year)
+  yeartable$Artist <- tolower(stri_trans_general(str = yeartable$Artist, id = "Latin-ASCII"))
+  return(yeartable)
+}
 
-2011: 4HPdL5jwsxKnh7RTAwq9hF
-2010: 5VqYaQDMWRzR5bOCKBvLF8
-2009: 0yoZw30ogd6gENBtx0q0HS
-2008: 1X6om0uyKtmxblTN6JK5dj
+semifinal_without_scores <- function(year, xpath1, xpath2)
+{
+  yeartable1 <- get_table_without_scores(year, xpath1)
+  yeartable1$Type <- "sf1"
+  yeartable2 <- get_table_without_scores(year, xpath2)
+  yeartable2$Type <- "sf2"
+  semi <- rbind(yeartable1, yeartable2)
+  return(semi)
+}
+
+eurovision2020 <- semifinal_without_scores("2020", '//*[@id="mw-content-text"]/div[1]/table[4]', '//*[@id="mw-content-text"]/div[1]/table[5]')
+
+eurovision2021 <- semifinal_without_scores("2021", '//*[@id="mw-content-text"]/div[1]/table[4]', '//*[@id="mw-content-text"]/div[1]/table[5]')
+
+songs_2020 <- get_spotify_year("4HYkOYcaF3JsniOcXtZQme")
+songs_2021 <- get_spotify_year("37i9dQZF1DWVCKO3xAlT1Q")
+
+songs_2020 <- songs_2020 %>% mutate(Artist = recode(Artist, "vasil garvanliev" = "vasil",
+                                                    "destiny & b-ok" = "destiny",
+                                                    "eden" = "eden alene",
+                                                    "dadi freyr" = "dadi og gagnamagnid",
+                                                    "samanta tina & arnis racinskis" = "samanta tina"))
+
+songs_2021 <- songs_2021 %>% mutate(Artist = recode(Artist, "eden" = "eden alene",
+                                                    "dadi freyr" = "dadi og gagnamagnid",
+                                                    "senhit & flo rida" = "senhit[h]",
+                                                    "fyr og flamme" = "fyr & flamme",
+                                                    "vasil garvanliev" = "vasil"))
+
+eurovision2020 <- left_join(eurovision2020, songs_2020, by = "Artist")
+eurovision2021 <- left_join(eurovision2021, songs_2021, by = "Artist")
+
+firesaga <- get_spotify_year("0u6ppFo3gWA3vTiGeDTWXl")
+```
