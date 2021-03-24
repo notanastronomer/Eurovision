@@ -12,14 +12,19 @@ library(tidyverse)
 library(mice)
 library(stringi)
 library(lubridate)
+library(rvest)
 ```
 
 ```{r}
-library(rvest)
+remove_footnotes_without_brackets <- function(dat)
+{
+  as.numeric(gsub("[a-z]", "", dat))
+}
 
 remove_footnotes <- function(dat)
 {
-  as.numeric(gsub("[a-z]", "", dat))
+  dat <- gsub("\\[.+\\]", "", dat)
+  return(dat)
 }
 
 get_table <- function(year, xpath)
@@ -45,8 +50,8 @@ final <- function(year, xpath)
 {
   yeartable <- get_table(year, xpath)
   yeartable$Type <- "f"
-  yeartable$Place <- remove_footnotes(yeartable$Place)
-  yeartable$Draw <- as.numeric(gsub("\\[.+\\]", "", yeartable$Draw))
+  yeartable$Place <- remove_footnotes_without_brackets(yeartable$Place)
+  yeartable$Draw <- remove_footnotes(yeartable$Draw)
   return(yeartable)
 }
 
@@ -60,39 +65,18 @@ dat <- rbind(dat, lapply(years, semifinal, xpath1 = '//*[@id="mw-content-text"]/
 
 dat <- rbind(dat, lapply(years, final, xpath = '//*[@id="mw-content-text"]/div[1]/table[5]') %>% bind_rows())
 
+dat$Artist <- remove_footnotes(dat$Artist)
+dat$Language <- remove_footnotes(dat$Language)
+dat$Draw <- as.numeric(as.character(remove_footnotes(dat$Draw)))
+dat$Place <- as.numeric(as.character(remove_footnotes(dat$Place)))
+
+dat$Artist <- tolower(stri_trans_general(str = dat$Artist, id = "Latin-ASCII"))
+dat$Artist <- gsub(" and ", " & ", dat$Artist)
+
 write.csv(dat, "scraped.csv")
 ```
 
-``` {r}
-rename_country <- function(dat, old_name, new_name)
-{
-  dat$To[dat$To == old_name] <- new_name
-  dat$From[dat$From == old_name] <- new_name
-  return(dat)
-}
-
-scores <- readxl::read_xlsx("eurovision_song_contest_1975_2019.xlsx")
-scores <- scores %>% filter(Type == 'f') %>% filter(Points > 0) %>% filter(Year > 2009) %>% select(Year, Points, From, To, Jury)
-
-scores <- rename_country(scores, "Bosnia & Herzegovina", "Bosnia and Herzegovina")
-scores <- rename_country(scores, "F.Y.R. Macedonia", "North Macedonia")
-scores <- rename_country(scores, "The Netherlands", "Netherlands")
-
-songtitles <- dat
-songtitles$To[songtitles$To == "Macedonia"] <- "North Macedonia"
-scores <- left_join(scores, songtitles, by = c("To", "Year"))
-
-scores$Artist <- tolower(stri_trans_general(str = scores$Artist, id = "Latin-ASCII"))
-scores$Artist <- gsub(" and ", " & ", scores$Artist)
-scores$Artist <- gsub("\\[.+\\]", "", scores$Artist)
-scores$Language <- gsub("\\[.+\\]", "", scores$Language)
-scores$Draw <- gsub("\\[.+\\]", "", scores$Draw)
-scores$Place <- gsub("\\[.+\\]", "", scores$Place)
-scores$Place <- as.numeric(as.character(scores$Place))
-scores$Draw <- as.numeric(as.character(scores$Draw))
-
-scores$Artist[scores$Artist == "o'g3ne"] <- "og3ne"
-```
+Need to fix Bulgaria and Norway 2012 sf2
 
 ``` {r}
 Sys.setenv(SPOTIFY_CLIENT_ID = 'cd564f2f03e147f5a7c7a6eb40997280')
@@ -117,78 +101,133 @@ get_spotify_year <- function(playlist)
   return(spotify_data)
 }
 
-playlists_complete <- c("3ZdQUt8Tmtt7oOU8UM2koe", "5sxwk5T34E2l2Ng02lipHS", "6Ey20ccpxRCd0AlaIuGJrB", "38ylmIPl9vHr2wV3Z9MLhf", "5ZmgTCsMieTC74swryPXIQ", "2ldMrwGLibJCxPrqvCx1p5", "2YPpTFZPn6s1y7q8PFRLv7", "1GEIW1EK1myFWQVgzkQo6Z")
-playlists_partial <- c("4HPdL5jwsxKnh7RTAwq9hF", "5VqYaQDMWRzR5bOCKBvLF8", "0yoZw30ogd6gENBtx0q0HS", "1X6om0uyKtmxblTN6JK5dj")
+playlists_complete <- c("3ZdQUt8Tmtt7oOU8UM2koe", "5sxwk5T34E2l2Ng02lipHS", "6Ey20ccpxRCd0AlaIuGJrB", "38ylmIPl9vHr2wV3Z9MLhf", "5ZmgTCsMieTC74swryPXIQ", "2ldMrwGLibJCxPrqvCx1p5", "2YPpTFZPn6s1y7q8PFRLv7", "1GEIW1EK1myFWQVgzkQo6Z", "5wvhuTnByaWkIgRbj5SHrJ", "5VqYaQDMWRzR5bOCKBvLF8", "0yoZw30ogd6gENBtx0q0HS", "1X6om0uyKtmxblTN6JK5dj")
 
-complete_years_12_19 <- as.data.frame(do.call(rbind, lapply(playlists_complete, get_spotify_year)))
-partial_years_09_12 <- as.data.frame(do.call(rbind, lapply(playlists_partial, get_spotify_year)))
+song_list <- as.data.frame(do.call(rbind, lapply(playlists_complete, get_spotify_year)))
 ```
 
 ``` {r}
-complete_years_12_19$Artist[complete_years_12_19$Artist == "miki nunez"] <- "miki"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "zalagasper"] <- "zala kralj & gasper santl"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "claudia pascoal & isaura"] <- "claudia pascoal"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "amaia & alfred garcia"] <- "amaia & alfred"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "isaiah firebrace"] <- "isaiah"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "ilinca & alex florea"] <- "ilinca ft. alex florea"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "og3ne"] <- "og3ne"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "anja nissen"] <- "anja"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "papai joci"] <- "joci papai"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "minus-one"] <- "minus one"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "zaa sanja vucic"] <- "sanja vucic zaa"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "justs sirmais"] <- "justs"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "monika linkyte"] <- "monika linkyte & vaidas baumila"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "kallay saunders"] <- "andras kallay-saunders"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "freaky fortune & riskykidd"] <- "freaky fortune feat. riskykidd"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "ovi & paula seling"] <- "paula seling & ovi"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "gianluca bezzina"] <- "gianluca"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "koza mostra & agathonas iakovidis"] <- "koza mostra feat. agathon iakovidis"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "birgit oigemeel"] <- "birgit"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "el sueno de morfeo"] <- "esdm"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "pasha parfeni"] <- "pasha parfeny"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "buranovskie babushki"] <- "buranovskiye babushki"
-complete_years_12_19$Artist[complete_years_12_19$Artist == "nenad knezevic knez"] <- "knez"
+rename_country <- function(dat, old_name, new_name)
+{
+  dat$To[dat$To == old_name] <- new_name
+  dat$From[dat$From == old_name] <- new_name
+  return(dat)
+}
 
+scores <- readxl::read_xlsx("eurovision_song_contest_1975_2019.xlsx")
+scores <- scores %>% filter(Type == 'f') %>% filter(Points > 0) %>% filter(Year > 2009) %>% select(Year, Points, From, To, Jury)
+
+scores <- rename_country(scores, "Bosnia & Herzegovina", "Bosnia and Herzegovina")
+scores <- rename_country(scores, "F.Y.R. Macedonia", "North Macedonia")
+scores <- rename_country(scores, "The Netherlands", "Netherlands")
+
+songtitles <- dat
+songtitles$To[songtitles$To == "Macedonia"] <- "North Macedonia"
+scores <- left_join(scores, songtitles, by = c("To", "Year"))
+
+scores$Artist[scores$Artist == "o'g3ne"] <- "og3ne"
 ```
 
 ``` {r}
-partial_years_09_12$Artist[partial_years_09_12$Artist == "paula seling & ovi"] <- "paula seling &  ovi"
-partial_years_09_12$Artist[partial_years_09_12$Artist == "giorgos alkaios"] <- "giorgos alkaios & friends"
-partial_years_09_12$Artist[partial_years_09_12$Artist == "peter nalitch"] <- "peter nalitch & friends" 
-partial_years_09_12$Artist[partial_years_09_12$Artist == "ell/nikki"] <- "ell & nikki"
-partial_years_09_12$Artist[partial_years_09_12$Artist == "loukas yorkas & stereo mike"] <- "loukas giorkas feat. stereo mike"
-partial_years_09_12$Artist[partial_years_09_12$Artist == "sjonni´s friends"] <- "sjonni's friends"
-partial_years_09_12$Artist[partial_years_09_12$Artist == "malena ernman & fredrik kempe"] <- "malena ernman"
-partial_years_09_12$Artist[partial_years_09_12$Artist == "soraya"] <- "soraya arnelas"
-partial_years_09_12$Artist[partial_years_09_12$Artist == "anastasia prikhodko"] <- "anastasiya prikhodko" 
-partial_years_09_12$Artist[partial_years_09_12$Artist == "igor cukrov & andrea susnjara"] <- "igor cukrov feat. andrea"
-partial_years_09_12$Artist[partial_years_09_12$Artist == "brinck"] <- "niels brinck" 
-partial_years_09_12$Artist[partial_years_09_12$Artist == "loboda"] <- "svetlana loboda" 
-partial_years_09_12$Artist[partial_years_09_12$Artist == "alex sparrow"] <- "alexey vorobyov" 
-partial_years_09_12$Artist[partial_years_09_12$Artist == "brajic"] <- "vukasin brajic"
-partial_years_09_12$Artist[partial_years_09_12$Artist == "boaz"] <- "boaz ma'uda"
-partial_years_09_12$Artist[partial_years_09_12$Artist == "jelena tomasevic & bora dugic"] <- "jelena tomasevic feat. bora dugic"
-partial_years_09_12$Artist[partial_years_09_12$Artist == "rodolfo chikilcuatre & tata golosa"] <- "rodolfo chikilicuatre"
-partial_years_09_12$Artist[partial_years_09_12$Artist == "vania"] <- "vania fernandes"
-partial_years_09_12$Artist[partial_years_09_12$Artist == "kraljevi ulice"] <- "kraljevi ulice & 75 cents"
-partial_years_09_12$Artist[partial_years_09_12$Artist == "nico und vlad mirita"] <- "nico & vlad" 
+song_list <- song_list %>% mutate(Artist = recode(Artist, "miki nunez" = "miki",
+                                                          "zalagasper" = "zala kralj & gasper santl",
+                                                          "claudia pascoal & isaura" = "claudia pascoal",
+                                                          "amaia & alfred garcia" = "amaia & alfred",
+                                                          "isaiah firebrace" = "isaiah",
+                                                          "ilinca & alex florea" = "ilinca ft. alex florea",
+                                                          "anja nissen" = "anja",
+                                                          "papai joci" = "joci papai",
+                                                          "minus-one" = "minus one",
+                                                          "zaa sanja vucic" = "sanja vucic zaa",
+                                                          "justs sirmais" = "justs",
+                                                          "monika linkyte" = "monika linkyte & vaidas baumila",
+                                                          "kallay saunders" = "andras kallay-saunders",
+                                                          "freaky fortune & riskykidd" = "freaky fortune feat. riskykidd",
+                                                          "gianluca bezzina" = "gianluca",
+                                                          "koza mostra & agathonas iakovidis" = "koza mostra feat. agathon iakovidis",
+                                                          "birgit oigemeel" = "birgit",
+                                                          "el sueno de morfeo" = "esdm",
+                                                          "pasha parfeni" = "pasha parfeny",
+                                                          "buranovskie babushki" = "buranovskiye babushki",
+                                                          "nenad knezevic knez" = "knez",
+                                                          "giorgos alkaios" = "giorgos alkaios & friends",
+                                                          "peter nalitch" = "peter nalitch & friends",
+                                                          "nikki jamal & ell" = "ell & nikki",
+                                                          "loukas yorkas & stereo mike" = "loukas giorkas feat. stereo mike",
+                                                          "sjonni´s friends" = "sjonni's friends",
+                                                          "malena ernman & fredrik kempe" = "malena ernman",
+                                                          "soraya" = "soraya arnelas",
+                                                          "anastasia prikhodko" = "anastasiya prikhodko",
+                                                          "igor cukrov & andrea susnjara" = "igor cukrov feat. andrea",
+                                                          "brinck" = "niels brinck",
+                                                          "loboda" = "svetlana loboda",
+                                                          "alex sparrow" = "alexey vorobyov",
+                                                          "brajic" = "vukasin brajic",
+                                                          "boaz" = "boaz ma'uda",
+                                                          "jelena tomasevic & bora dugic" = "jelena tomasevic feat. bora dugic",
+                                                          "rodolfo chikilcuatre & tata golosa" = "rodolfo chikilicuatre",
+                                                          "vania" = "vania fernandes",
+                                                          "kraljevi ulice" = "kraljevi ulice & 75 cents",
+                                                          "nico und vlad mirita" = "nico & vlad",
+                                                          "miroslav 'miro' kostadinov" = "miro",
+                                                          "daria kinzer" = "daria",
+                                                          "3+2" = "3+2 feat robert wells",
+                                                          "roko blazevic" = "roko",
+                                                          "pernilla" = "pernilla karlsson",
+                                                          "jurijus" = "jurij veklenko",
+                                                          "paula seling & ovi" = "paula seling &  ovi",
+                                                          "paula seling &  ovi" = "paula seling &  ovi",
+                                                          "darude & sebastian rejman" = "darude feat. sebastian rejman",
+                                                          "per (please explain the rhythm)" = "per",
+                                                          "vilija mataciunaite" = "vilija",
+                                                          "tijana dapcevic" = "tijana",
+                                                          "jessika & jenifer brening" = "jessika feat. jenifer brening",
+                                                          "gromee & lukas meijer" = "gromee feat. lukas meijer",
+                                                          "d-mol" = "d mol",
+                                                          "can-linn & kasey smith" = "can-linn feat. kasey smith",
+                                                          "dalal & deen & ana rucner" = "dalal & deen feat. ana rucner & jala",
+                                                          "despina olimpiou" = "despina olympiou",
+                                                          "sevak" = "sevak khanagyan",
+                                                          "ethno - jazz band iriao" = "ethno-jazz band iriao",
+                                                          "molly sterling & greg french" = "molly sterling",
+                                                          "ovi & paula seling" = "paula seling & ovi",
+                                                          "anastasiya vinnikova" = "anastasia vinnikova"))
+
+dat$Artist[dat$Artist == "o'g3ne"] <- "og3ne"
 ```
 
 Missing:
 2011: 2
 2010: 1
 
-This is unbelievably grungy.
 ``` {r}
-year_set <- rbind(complete_years_12_19, partial_years_09_12)
-year_set <- year_set[-c(182, 214, 244, 345, 375, 390, 452, 470), ]
+song_list <- song_list[-c(182, 214, 244, 342, 346, 348, 352, 372, 386, 401, 463, 480), ]
 
-list_artists <- year_set$Artist[duplicated(year_set$Artist)]
-year_set$repeat_artist <- ifelse(year_set$Artist %in% list_artists, 1, 0)
+list_artists <- song_list$Artist[duplicated(song_list$Artist)]
+song_list$repeat_artist <- ifelse(song_list$Artist %in% list_artists, 1, 0)
 
-year_set_without_repeats <- subset(year_set, year_set$repeat_artist == 0)
-year_set_repeats <- subset(year_set, year_set$repeat_artist == 1)
+year_set_without_repeats <- subset(song_list, song_list$repeat_artist == 0)
+year_set_repeats <- subset(song_list, song_list$repeat_artist == 1)
 
+year_set_repeats$track.album.release_date[year_set_repeats$Artist == "manga"] <- "2010-01-01"
+year_set_repeats$Year <- year(as_date(year_set_repeats$track.album.release_date))
+year_set_repeats$Year[year_set_repeats$Artist == "kaliopi" & year_set_repeats$Year == 2020] <- 2012
+```
+
+``` {r}
+dat <- left_join(dat, year_set_without_repeats, by = "Artist")
+
+complete <- subset(dat, complete.cases(dat))
+incomplete <- subset(dat, !complete.cases(dat))
+
+incomplete<- incomplete[c(1:9)]
+incomplete <- left_join(incomplete, year_set_repeats, by = c("Artist", "Year"))
+
+dat <- rbind(complete, incomplete)
+```
+
+Ignore these two chunks; they're old.
+``` {r}
 year_set_repeats$Year <- year(year_set_repeats$track.album.release_date)
 year_set_repeats$Year[year_set_repeats$Artist == "kaliopi" & year_set_repeats$Year == 2020] <- 2012
 
@@ -202,23 +241,47 @@ not_yet_merged <- not_yet_merged[c(1:12)]
 multiples <- left_join(not_yet_merged, year_set_repeats, by = c("Artist", "Year"))
 
 scores_with_musical <- rbind(scores_with_musical, multiples)
-```
 
-``` {r}
-scores_with_musical$english <- ifelse(grepl("English", scores_with_musical$Language, fixed = TRUE), 1, 0)
-scores_with_musical$multi <- ifelse(grepl(",", scores_with_musical$Language, fixed = TRUE), 1, 0)
-scores_with_musical$not_english <- ifelse(scores_with_musical$Language == "English", 0, 1)
-```
-
-``` {r}
-scores_with_musical$key <- paste0(scores_with_musical$key_name, " ", scores_with_musical$mode_name)
-unique(scores_with_musical$key)
+subset(scores_with_musical, !complete.cases(scores_with_musical))
 ```
 
 ``` {r}
 scores_with_musical$NPoints <- ifelse(scores_with_musical$Year > 2015, scores_with_musical$Points.x / 2, scores_with_musical$Points.x)
 
+scores_with_musical$NPoints.tot <- ifelse(scores_with_musical$Year > 2015, scores_with_musical$Points.y / 2, scores_with_musical$Points.y)
+
 write.csv(scores_with_musical, "fulldata.csv")
+```
+
+Add in English/multi-lingual dummies.
+
+``` {r}
+language_dummies <- function(dat)
+{
+  dat$contains_english <- ifelse(grepl("English", dat$Language, fixed = TRUE), 1, 0)
+  dat$multi <- ifelse(grepl(",", dat$Language, fixed = TRUE), 1, 0)
+  dat$not_english_at_all <- ifelse(dat$Language == "English", 0, 1)
+  return(dat)
+}
+
+dat <- language_dummies(dat)
+```
+
+``` {r}
+dat <- dat %>% group_by(Year, Type) %>% mutate(tot = sum(Points))
+
+dat$NPoints <- dat$Points / dat$tot
+dat$temposq <- dat$tempo * dat$tempo
+
+dat <- dat %>% arrange(Year) %>% group_by(Type) %>% mutate(second_appearance = as.numeric(duplicated(Artist)))
+
+finals <- subset(dat, Type == "f")
+semis <- subset(dat, Type != "f")
+
+predict_finals <- lm(data = finals, NPoints ~ Draw + To + danceability + energy + key_name + loudness + mode + speechiness + acousticness + instrumentalness + liveness + valence + tempo + track.duration_ms + contains_english + multi + second_appearance + temposq)
+
+
+predict_semis <- lm(data = semis, NPoints ~ Draw + To + danceability + energy + key_name + loudness + mode + speechiness + acousticness + instrumentalness + liveness + valence + tempo + track.duration_ms + contains_english + multi + temposq)
 ```
 
 ``` {r}
@@ -263,6 +326,21 @@ songs_2021 <- songs_2021 %>% mutate(Artist = recode(Artist, "eden" = "eden alene
 
 eurovision2020 <- left_join(eurovision2020, songs_2020, by = "Artist")
 eurovision2021 <- left_join(eurovision2021, songs_2021, by = "Artist")
+eurovision2021$Draw <- 5
 
-firesaga <- get_spotify_year("0u6ppFo3gWA3vTiGeDTWXl")
+eurovision2020$temposq <- eurovision2020$tempo * eurovision2020$tempo
+eurovision2021$temposq <- eurovision2021$tempo * eurovision2021$tempo
+
+eurovision2020 <- language_dummies(eurovision2020)
+eurovision2021 <- language_dummies(eurovision2021)
+
+firesaga <- get_spotify_year("5jfMkSiqqDbcKvzZu0xlYq")
+
+colnames(eurovision2020)
+
+predicted <- cbind(as.data.frame(predict(predict_semis, eurovision2020)), eurovision2020)
+predicted %>% arrange()
+
+predicted <- cbind(as.data.frame(predict(predict_semis, eurovision2021)), eurovision2021)
+predicted %>% arrange()
 ```
