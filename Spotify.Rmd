@@ -278,10 +278,14 @@ dat <- dat %>% arrange(Year) %>% group_by(Type) %>% mutate(second_appearance = a
 finals <- subset(dat, Type == "f")
 semis <- subset(dat, Type != "f")
 
+ggplot(data = semis, aes(x = NPoints, y = danceability)) + geom_point() + geom_smooth(method = 'lm')
+
 predict_finals <- lm(data = finals, NPoints ~ Draw + To + danceability + energy + key_name + loudness + mode + speechiness + acousticness + instrumentalness + liveness + valence + tempo + track.duration_ms + contains_english + multi + second_appearance + temposq)
 
 
 predict_semis <- lm(data = semis, NPoints ~ Draw + To + danceability + energy + key_name + loudness + mode + speechiness + acousticness + instrumentalness + liveness + valence + tempo + track.duration_ms + contains_english + multi + temposq)
+
+summary(predict_finals)
 ```
 
 ``` {r}
@@ -331,6 +335,8 @@ eurovision2021$Draw <- 5
 eurovision2020$temposq <- eurovision2020$tempo * eurovision2020$tempo
 eurovision2021$temposq <- eurovision2021$tempo * eurovision2021$tempo
 
+eurovision2021$second_appearance <- 0
+
 eurovision2020 <- language_dummies(eurovision2020)
 eurovision2021 <- language_dummies(eurovision2021)
 
@@ -339,8 +345,9 @@ firesaga <- get_spotify_year("5jfMkSiqqDbcKvzZu0xlYq")
 colnames(eurovision2020)
 
 predicted <- cbind(as.data.frame(predict(predict_semis, eurovision2020)), eurovision2020)
-predicted %>% arrange()
+predicted %>% arrange(predict(predict_semis, eurovision2020))
 
-predicted <- cbind(as.data.frame(predict(predict_semis, eurovision2021)), eurovision2021)
-predicted %>% arrange()
+predicted <- cbind(as.data.frame(predict(predict_finals, eurovision2021)), eurovision2021)
+predicted$`predict(predict_finals, eurovision2021)`
+predicted %>% arrange(`predict(predict_finals, eurovision2021)`)
 ```
